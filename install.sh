@@ -8,9 +8,12 @@ set -e
 REPO="https://github.com/markoladika/robo-talk"
 
 # Detect target Claude config dirs.
+# Respects $CLAUDE_CONFIG_DIR (set by some Claude wrappers like RNS)
 # Override with: CLAUDE_HOMES="$HOME/.claude:$HOME/.claude01" curl ... | bash
 if [ -n "$CLAUDE_HOMES" ]; then
   IFS=':' read -ra CLAUDE_DIRS <<< "$CLAUDE_HOMES"
+elif [ -n "$CLAUDE_CONFIG_DIR" ]; then
+  CLAUDE_DIRS=("$CLAUDE_CONFIG_DIR")
 else
   CLAUDE_DIRS=()
   for d in "$HOME"/.claude "$HOME"/.claude[0-9]*; do
