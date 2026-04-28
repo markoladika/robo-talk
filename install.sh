@@ -6,9 +6,21 @@
 set -e
 
 REPO="https://github.com/markoladika/robo-talk"
-INSTALL_DIR="${HOME}/.claude/robo-talk"
-STYLES_DIR="${HOME}/.claude/output-styles"
-SKILLS_DIR="${HOME}/.claude/skills/robo"
+
+# Detect target Claude config dirs.
+# Override with: CLAUDE_HOMES="$HOME/.claude:$HOME/.claude01" curl ... | bash
+if [ -n "$CLAUDE_HOMES" ]; then
+  IFS=':' read -ra CLAUDE_DIRS <<< "$CLAUDE_HOMES"
+else
+  CLAUDE_DIRS=()
+  for d in "$HOME"/.claude "$HOME"/.claude[0-9]*; do
+    [ -d "$d" ] && CLAUDE_DIRS+=("$d")
+  done
+  [ ${#CLAUDE_DIRS[@]} -eq 0 ] && CLAUDE_DIRS=("$HOME/.claude")
+fi
+
+# Clone/update the repo once, into the primary account
+INSTALL_DIR="${CLAUDE_DIRS[0]}/robo-talk"
 
 # Detect if running from local repo (for testing)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -37,49 +49,45 @@ else
   fi
 fi
 
-# Copy output style
-mkdir -p "$STYLES_DIR"
-cp "$INSTALL_DIR/output-styles/robo-core.md" "$STYLES_DIR/"
-echo "[STATUS] Output style copied to $STYLES_DIR/robo-core.md"
-
-# Copy skill
-mkdir -p "$SKILLS_DIR"
-cp "$INSTALL_DIR/skills/robo/SKILL.md" "$SKILLS_DIR/"
-echo "[STATUS] Skill /robo copied to $SKILLS_DIR/"
-
 # Make hooks executable
 chmod +x "$INSTALL_DIR/hooks/"*.sh "$INSTALL_DIR/hooks/"*.js 2>/dev/null || true
 
-# Auto-activate output style in ~/.claude/settings.json
-# Uses node (a hard dependency of Claude Code, so guaranteed present) for
-# portable JSON merging across macOS and Linux without requiring jq.
-SETTINGS_FILE="${HOME}/.claude/settings.json"
-mkdir -p "$(dirname "$SETTINGS_FILE")"
-if command -v node &>/dev/null; then
-  node -e '
-    const fs = require("fs");
-    const f = process.argv[1];
-    const d = fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, "utf8")) : {};
-    d.outputStyle = "Robo Core";
-    fs.writeFileSync(f, JSON.stringify(d, null, 2) + "\n");
-  ' "$SETTINGS_FILE"
-  echo "[STATUS] Output style activated in $SETTINGS_FILE"
-else
-  if [ ! -f "$SETTINGS_FILE" ]; then
-    echo '{"outputStyle": "Robo Core"}' > "$SETTINGS_FILE"
-    echo "[STATUS] Output style activated in $SETTINGS_FILE"
+# Install into every detected account
+for CLAUDE_DIR in "${CLAUDE_DIRS[@]}"; do
+  echo "[STATUS] Installing into $CLAUDE_DIR"
+  STYLES_DIR="$CLAUDE_DIR/output-styles"
+  SKILLS_DIR="$CLAUDE_DIR/skills/robo"
+  SETTINGS_FILE="$CLAUDE_DIR/settings.json"
+
+  mkdir -p "$STYLES_DIR" "$SKILLS_DIR"
+  cp "$INSTALL_DIR/output-styles/robo-core.md" "$STYLES_DIR/"
+  cp "$INSTALL_DIR/skills/robo/SKILL.md" "$SKILLS_DIR/"
+
+  mkdir -p "$(dirname "$SETTINGS_FILE")"
+  if command -v node &>/dev/null; then
+    node -e '
+      const fs = require("fs");
+      const f = process.argv[1];
+      const d = fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, "utf8")) : {};
+      d.outputStyle = "Robo Core";
+      fs.writeFileSync(f, JSON.stringify(d, null, 2) + "\n");
+    ' "$SETTINGS_FILE"
   else
-    echo "[WARNING] node not found. Add manually to $SETTINGS_FILE:"
-    echo '  "outputStyle": "Robo Core"'
+    if [ ! -f "$SETTINGS_FILE" ]; then
+      echo '{"outputStyle": "Robo Core"}' > "$SETTINGS_FILE"
+    else
+      echo "[WARNING] node not found. Add manually to $SETTINGS_FILE:"
+      echo '  "outputStyle": "Robo Core"'
+    fi
   fi
-fi
+done
 
 echo ""
-echo "[COMPLETE] robo-talk installed and activated."
+echo "[COMPLETE] robo-talk installed and activated for ${#CLAUDE_DIRS[@]} account(s)."
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo " Start a new Claude Code session. Robo Core is active."
 echo ""
 echo " To deactivate: /config → Output style → Default"
-echo " To uninstall:  rm -rf ~/.claude/robo-talk ~/.claude/output-styles/robo-core.md ~/.claude/skills/robo"
+echo " To uninstall:  rm -rf ~/.claude/robo-talk ~/.claude*/output-styles/robo-core.md ~/.claude*/skills/robo"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
