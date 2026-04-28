@@ -50,6 +50,22 @@ else
              -print0 2>/dev/null)
   # Fallback if nothing found (fresh machine, first install)
   [ ${#CLAUDE_DIRS[@]} -eq 0 ] && CLAUDE_DIRS=("$HOME/.claude")
+
+  # Dedupe nested config dirs: if B is inside A, drop A. Keeps the most
+  # specific (deepest) dir per account, which matches what Claude Code
+  # actually reads when CLAUDE_CONFIG_DIR points into a wrapper-managed
+  # path nested inside an account's HOME tree. Prevents the skill from
+  # appearing duplicated when multiple config-looking dirs share a tree.
+  FILTERED=()
+  for a in "${CLAUDE_DIRS[@]}"; do
+    nested=false
+    for b in "${CLAUDE_DIRS[@]}"; do
+      [ "$a" = "$b" ] && continue
+      case "$b" in "$a"/*) nested=true; break;; esac
+    done
+    $nested || FILTERED+=("$a")
+  done
+  CLAUDE_DIRS=("${FILTERED[@]}")
 fi
 
 # Clone/update the repo once, into the primary account
