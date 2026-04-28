@@ -7,18 +7,48 @@ set -e
 
 REPO="https://github.com/markoladika/robo-talk"
 
-# Detect target Claude config dirs.
-# Respects $CLAUDE_CONFIG_DIR (set by some Claude wrappers like RNS)
-# Override with: CLAUDE_HOMES="$HOME/.claude:$HOME/.claude01" curl ... | bash
+# Detect target Claude Code config dirs.
+# Override with: CLAUDE_HOMES="path1:path2" curl ... | bash
+#
+# A Claude Code config dir is identified by containing settings.json
+# AND at least one Claude-specific subdir (projects/, todos/, statsig/,
+# shell-snapshots/, ide/, plugins/). This catches:
+#   - default ~/.claude
+#   - multi-account ~/.claude01, ~/.claude02, ...
+#   - XDG-style ~/.config/claude*
+#   - custom CLAUDE_CONFIG_DIR locations used by account wrappers
+is_claude_config_dir() {
+  local d="$1"
+  [ -d "$d" ] || return 1
+  [ -f "$d/settings.json" ] || return 1
+  for marker in projects todos statsig shell-snapshots ide plugins; do
+    [ -d "$d/$marker" ] && return 0
+  done
+  return 1
+}
+
 if [ -n "$CLAUDE_HOMES" ]; then
   IFS=':' read -ra CLAUDE_DIRS <<< "$CLAUDE_HOMES"
-elif [ -n "$CLAUDE_CONFIG_DIR" ]; then
-  CLAUDE_DIRS=("$CLAUDE_CONFIG_DIR")
 else
   CLAUDE_DIRS=()
-  for d in "$HOME"/.claude "$HOME"/.claude[0-9]*; do
-    [ -d "$d" ] && CLAUDE_DIRS+=("$d")
-  done
+  # Scan likely roots; bounded depth to stay fast on big home dirs.
+  while IFS= read -r -d '' settings; do
+    d="$(dirname "$settings")"
+    if is_claude_config_dir "$d"; then
+      # de-dup
+      skip=false
+      for existing in "${CLAUDE_DIRS[@]}"; do
+        [ "$existing" = "$d" ] && skip=true && break
+      done
+      $skip || CLAUDE_DIRS+=("$d")
+    fi
+  done < <(find "$HOME" -maxdepth 6 -type f -name settings.json \
+             -not -path "*/node_modules/*" \
+             -not -path "*/.cache/*" \
+             -not -path "*/.git/*" \
+             -not -path "*/projects/*" \
+             -print0 2>/dev/null)
+  # Fallback if nothing found (fresh machine, first install)
   [ ${#CLAUDE_DIRS[@]} -eq 0 ] && CLAUDE_DIRS=("$HOME/.claude")
 fi
 
