@@ -51,23 +51,25 @@ echo "[STATUS] Skill /robo copied to $SKILLS_DIR/"
 chmod +x "$INSTALL_DIR/hooks/"*.sh "$INSTALL_DIR/hooks/"*.js 2>/dev/null || true
 
 # Auto-activate output style in ~/.claude/settings.json
+# Uses node (a hard dependency of Claude Code, so guaranteed present) for
+# portable JSON merging across macOS and Linux without requiring jq.
 SETTINGS_FILE="${HOME}/.claude/settings.json"
-if command -v jq &>/dev/null; then
-  if [ -f "$SETTINGS_FILE" ]; then
-    # Merge outputStyle into existing settings
-    TEMP=$(mktemp)
-    jq '. + {"outputStyle": "Robo Core"}' "$SETTINGS_FILE" > "$TEMP" && mv "$TEMP" "$SETTINGS_FILE"
-  else
-    echo '{"outputStyle": "Robo Core"}' > "$SETTINGS_FILE"
-  fi
+mkdir -p "$(dirname "$SETTINGS_FILE")"
+if command -v node &>/dev/null; then
+  node -e '
+    const fs = require("fs");
+    const f = process.argv[1];
+    const d = fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, "utf8")) : {};
+    d.outputStyle = "Robo Core";
+    fs.writeFileSync(f, JSON.stringify(d, null, 2) + "\n");
+  ' "$SETTINGS_FILE"
   echo "[STATUS] Output style activated in $SETTINGS_FILE"
 else
-  # No jq — write if file does not exist, otherwise instruct user
   if [ ! -f "$SETTINGS_FILE" ]; then
     echo '{"outputStyle": "Robo Core"}' > "$SETTINGS_FILE"
     echo "[STATUS] Output style activated in $SETTINGS_FILE"
   else
-    echo "[WARNING] jq not found. Add manually to $SETTINGS_FILE:"
+    echo "[WARNING] node not found. Add manually to $SETTINGS_FILE:"
     echo '  "outputStyle": "Robo Core"'
   fi
 fi
