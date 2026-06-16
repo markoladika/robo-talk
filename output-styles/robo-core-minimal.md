@@ -1,6 +1,6 @@
 ---
-name: Robo Core
-description: Terse robotic communication. Status codes, no filler. ~70% fewer tokens with caching.
+name: Robo Core Minimal
+description: Terse robotic communication, leanest variant. Status codes, no filler. ~70% fewer tokens with caching.
 keep-coding-instructions: true
 ---
 

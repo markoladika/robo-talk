@@ -98,9 +98,6 @@ else
   fi
 fi
 
-# Make hooks executable
-chmod +x "$INSTALL_DIR/hooks/"*.sh "$INSTALL_DIR/hooks/"*.js 2>/dev/null || true
-
 # Install into every detected account
 for CLAUDE_DIR in "${CLAUDE_DIRS[@]}"; do
   echo "[STATUS] Installing into $CLAUDE_DIR"
@@ -113,20 +110,78 @@ for CLAUDE_DIR in "${CLAUDE_DIRS[@]}"; do
   cp "$INSTALL_DIR/skills/robo/SKILL.md" "$SKILLS_DIR/"
 
   mkdir -p "$(dirname "$SETTINGS_FILE")"
+  # Merge settings with whichever JSON-capable tool is available.
+  # Sets outputStyle, plus noise-reduction settings ONLY when the user has not
+  # already chosen a value (never override intent). node -> python3 -> jq -> crude.
   if command -v node &>/dev/null; then
     node -e '
       const fs = require("fs");
       const f = process.argv[1];
-      const d = fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, "utf8")) : {};
+      const d = fs.existsSync(f) && fs.readFileSync(f, "utf8").trim() ? JSON.parse(fs.readFileSync(f, "utf8")) : {};
       d.outputStyle = "Robo Core";
+      if (d.spinnerTipsEnabled === undefined) d.spinnerTipsEnabled = false;
+      if (d.showTurnDuration === undefined) d.showTurnDuration = false;
+      if (d.awaySummaryEnabled === undefined) d.awaySummaryEnabled = false;
       fs.writeFileSync(f, JSON.stringify(d, null, 2) + "\n");
     ' "$SETTINGS_FILE"
+  elif command -v python3 &>/dev/null; then
+    python3 - "$SETTINGS_FILE" <<'PY'
+import json, sys, os
+f = sys.argv[1]
+d = json.load(open(f)) if os.path.exists(f) and os.path.getsize(f) else {}
+d["outputStyle"] = "Robo Core"
+for k in ("spinnerTipsEnabled", "showTurnDuration", "awaySummaryEnabled"):
+    d.setdefault(k, False)
+with open(f, "w") as fh:
+    json.dump(d, fh, indent=2)
+    fh.write("\n")
+PY
+  elif command -v jq &>/dev/null; then
+    [ -s "$SETTINGS_FILE" ] || echo '{}' > "$SETTINGS_FILE"
+    TEMP=$(mktemp)
+    jq '.outputStyle = "Robo Core"
+        | (if has("spinnerTipsEnabled") then . else .spinnerTipsEnabled = false end)
+        | (if has("showTurnDuration")  then . else .showTurnDuration  = false end)
+        | (if has("awaySummaryEnabled") then . else .awaySummaryEnabled = false end)' \
+      "$SETTINGS_FILE" > "$TEMP" && mv "$TEMP" "$SETTINGS_FILE"
   else
     if [ ! -f "$SETTINGS_FILE" ]; then
       echo '{"outputStyle": "Robo Core"}' > "$SETTINGS_FILE"
     else
-      echo "[WARNING] node not found. Add manually to $SETTINGS_FILE:"
+      echo "[WARNING] node/python3/jq not found. Add manually to $SETTINGS_FILE:"
       echo '  "outputStyle": "Robo Core"'
+    fi
+  fi
+
+  # Optional robo status line (model, context, token spend, rate limits).
+  # Opt in with: ROBO_STATUSLINE=1 bash install.sh
+  # Non-destructive: never overwrites an existing statusLine.
+  if [ "${ROBO_STATUSLINE:-0}" = "1" ]; then
+    SL_DST="$CLAUDE_DIR/robo-statusline.sh"
+    cp "$INSTALL_DIR/statusline/robo-statusline.sh" "$SL_DST" && chmod +x "$SL_DST"
+    if command -v python3 &>/dev/null; then
+      python3 - "$SETTINGS_FILE" "$SL_DST" <<'PY'
+import json, sys, os
+f, sl = sys.argv[1], sys.argv[2]
+d = json.load(open(f)) if os.path.exists(f) and os.path.getsize(f) else {}
+if "statusLine" in d:
+    print("[WARNING] statusLine already set; left as-is. Robo status line at: " + sl)
+else:
+    d["statusLine"] = {"type": "command", "command": sl}
+    with open(f, "w") as fh:
+        json.dump(d, fh, indent=2); fh.write("\n")
+    print("[STATUS] Robo status line enabled.")
+PY
+    elif command -v jq &>/dev/null; then
+      if jq -e '.statusLine' "$SETTINGS_FILE" &>/dev/null; then
+        echo "[WARNING] statusLine already set; left as-is. Robo status line at: $SL_DST"
+      else
+        TEMP=$(mktemp)
+        jq --arg c "$SL_DST" '.statusLine = {type:"command", command:$c}' "$SETTINGS_FILE" > "$TEMP" && mv "$TEMP" "$SETTINGS_FILE"
+        echo "[STATUS] Robo status line enabled."
+      fi
+    else
+      echo "[WARNING] Could not edit settings. Enable manually: set statusLine.command to $SL_DST"
     fi
   fi
 done
