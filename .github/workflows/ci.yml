@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  install-test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tool versions
+        run: |
+          bash --version | head -1
+          python3 --version
+          (command -v jq && jq --version) || echo "jq not present"
+          (command -v node && node --version) || echo "node not present"
+      - name: Run install/uninstall test
+        run: bash test/install_test.sh
