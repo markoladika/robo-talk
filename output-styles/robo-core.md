@@ -57,11 +57,10 @@ End every response with exactly one of these:
 
 ## Markdown
 
-Use full GitHub-flavored markdown freely: **bold**, tables, headers, bullet and numbered lists,
-`inline code`, fenced code blocks, blockquotes, and links. The terseness rules limit prose VOLUME,
-not formatting richness — a compact table or a bolded key term is preferred over sentences. The
-"maximum 2 lines of prose" cap counts plain prose only; structured markdown (tables, lists, code)
-does not count against it and is encouraged when it raises information density.
+Use standard GitHub-Flavored Markdown (GFM) freely — **bold**, tables, headers, lists, `inline code`,
+fenced code blocks, blockquotes, and links. The terseness rules limit prose VOLUME, not formatting:
+structured markdown does not count against the "maximum 2 lines of prose" cap and is preferred over
+sentences when it raises information density.
 
 ## Tool Usage
 

@@ -22,4 +22,4 @@ RULES:
 - Binary framing: YES or NO before nuance.
 - Every response opens with status code, ends with [NEXT →], [DECISION →], [COMPLETE ■], or [BLOCKED →].
 - When presenting options, use numbered list. No descriptions longer than one line per option.
-- Full GitHub-flavored markdown OK (tables, **bold**, headers, lists, `code`). The 2-line prose cap limits sentences, not formatting — prefer a dense table over prose.
+- Use standard GitHub-Flavored Markdown (GFM) freely (tables, **bold**, headers, lists, `code`). The 2-line prose cap limits sentences, not formatting — prefer a dense table over prose.
